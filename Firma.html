@@ -44,6 +44,8 @@
 
         #loginScreen { display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 300px; }
         input { padding: 15px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: white; outline: none; font-size: 16px; width: 100%; box-sizing: border-box; text-align: center;}
+        
+        .channel-badge { background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); color: #fbbf24; padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; margin-top: 15px; font-family: monospace; }
     </style>
 </head>
 <body>
@@ -65,7 +67,8 @@
     <div id="waitScreen" style="display: none; flex-direction: column; align-items: center;">
         <div class="radar"></div>
         <h2 style="margin:0; color:#a855f7;">In attesa del PC...</h2>
-        <p style="color:#94a3b8; font-size: 14px;">Lascia questa schermata aperta.<br>Il documento apparirà qui in automatico.</p>
+        <div class="channel-badge" id="radarChannelInfo">CANALE: ???</div>
+        <p style="color:#94a3b8; font-size: 14px; margin-top:20px;">Lascia questa schermata aperta.<br>Il documento apparirà qui in automatico.</p>
         <button class="btn btn-outline" style="margin-top:40px; padding: 10px 20px; font-size:11px;" onclick="esci()">DISCONNETTI TABLET</button>
     </div>
 
@@ -111,6 +114,7 @@
         if(sId) {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('waitScreen').style.display = 'flex';
+            document.getElementById('radarChannelInfo').innerText = `IN ASCOLTO SU: ${sId}`;
             iniziaAscolto(sId);
         } else {
             document.getElementById('loginScreen').style.display = 'flex';
@@ -126,7 +130,6 @@
         const btn = document.querySelector('#loginScreen .btn-purple');
         btn.innerText = "Verifica..."; btn.disabled = true;
 
-        // Controlla se la password inserita coincide con quella salvata dal PC
         firebase.database().ref(`MASTER_ADMIN_DB/structures_data/${s}/settings/tabletPass`).once('value').then(snap => {
             const dbPass = snap.val();
             if(dbPass && dbPass === p) {
@@ -218,15 +221,24 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ appId: currentAppId, image: base64, now: new Date().toLocaleString('it-IT') })
-        }).then(res => res.json()).then(data => {
+        }).then(async res => {
+            // Nuova lettura "corazzata" per evitare crash se Make risponde male
+            const textResponse = await res.text(); 
+            try {
+                return JSON.parse(textResponse); 
+            } catch(e) {
+                console.log("Risposta Make non JSON:", textResponse);
+                return { url: textResponse }; 
+            }
+        }).then(data => {
             firebase.database().ref(`MASTER_ADMIN_DB/structures_data/${sId}/device_sync/tablet`).update({
-                status: 'completed', driveLink: data.fileUrl || data.url
+                status: 'completed', driveLink: data.fileUrl || data.url || "Salvato"
             });
             btn.innerHTML = '<i class="material-icons-round">cloud_upload</i> CONFERMA FIRMA'; btn.disabled = false;
             pulisciFirma();
             chiudiFirma();
         }).catch(err => {
-            alert('Errore di connessione a Make.');
+            alert('Blocco di Rete: Il tablet non riesce a raggiungere Make. (Controlla la connessione o eventuali AdBlocker)');
             btn.innerHTML = '<i class="material-icons-round">cloud_upload</i> CONFERMA FIRMA'; btn.disabled = false;
         });
     }
@@ -234,4 +246,6 @@
     document.addEventListener('DOMContentLoaded', checkLogin);
 </script>
 </body>
+</html>
+
 </html>
